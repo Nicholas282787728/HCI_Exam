@@ -1,0 +1,503 @@
+---
+title: "Bank robery - Data Analysis"
+author: "Simon Hansen adapted from Rnault"
+date: "3/2/2020"
+output: html_document
+runtime: html_document
+---
+
+TO DO liste: 
+- Lav model page færdig. 
+
+```{r setup, include=FALSE}
+library(pacman)
+
+pacman::p_load(
+  "shiny", "shinydashboard","shinycustomloader","DT", "tidyverse", "lme4","sjPlot", "plotly")
+
+setwd("C:/Users/Simon/Google Drev/Uni/HCI/HCI_Exam")
+
+```
+
+# FIRST PART: Preparing
+
+```{r, echo=FALSE}
+
+### 1. We load the data as well as its description
+#data <- read.csv("BankRoberyExampleData.csv", row.names = 1)
+
+### 2. Make descriptions
+Variabel = c("ID", "Partner", "Trial", "PlayerResp", "RT", "PartnerResp", "CoopRate", "SocRep", "Rating")
+Beskrivelse = c("Unikt ID som representerer hver forsøgsdeltager", "Hvilken partner forsøgsdeltageren interagerede med", "Rundenummer", "Hvad forsøgsdeltageren svarede til partneren", "Hvor lang tid forsøgspersonen var om at svare", "Hvad partneren svarede eller ville have svaret", "Partnerens samarbejdsvillighed i procent", "Partnerens sociale ry", "Den score som forsøgdeltageren har givet personen efter eksperimentet")
+description = data.frame(Variabel, Beskrivelse)
+
+
+# Model description
+Variabel  = c("Predictors", "Estimates", "CI (Confidence interval)", "p", "Observations", "Marginal R^2", "Conditional R^2")
+Forklaring = c("De uafhængige variable modellen har fået", "Størrelsen af effekten", "Estimatets usikkerhed (95 %)" , "P-værdien. Signifikant under 0.05", "Antallet af datapunkter i modellen", "Forklaringsgraden af de valgte variabler", "Forklaringsgraden for hele modellen.")
+
+model_explain = data.frame(Variabel, Forklaring)
+```
+
+# PART II: THE USER INTERFACE
+
+```{r}
+# Setting up the UI for the website
+ui <- dashboardPage(
+  dashboardHeader(title = "Bank Robery Data Analysis"),
+  
+  dashboardSidebar(
+    sidebarMenu(
+      menuItem("Opgave og Data", tabName ="Intro", icon = icon("table")),
+      menuItem("Grafer", tabName ="Exploring", icon = icon("chart-line")),
+      menuItem("Deskriptiv statistik", tabName ="Modelling", icon = icon("calculator")),
+      menuItem("Analyse", tabName ="Analysis", icon = icon("laptop-code"))
+    )
+  ),
+  
+  dashboardBody(
+    
+    tabItems(
+      
+      ############## THE INTRODUCTION TAB WITH INFO AND TABLES #################################
+      tabItem(tabName = "Intro",
+              
+              # The box with short introduction text:
+              box(width = 12,
+                  h4("Introduktion:"),
+                  "På denne hjemmside har I mulighed for at undersøge data fra det eksperiment I lige har gennemført. I skal forsøge at besvare nedenstående opgaver. Hjemmesiden er meget simpel og består af 4 sider. Den første indeholder opgaverne I skal løse og kan vise dataen. På anden siden kan I lave grafer over dataen. På tredje side kan I udregne forskellige deskriptive statistiske værdier. Den sidste side kan bruges, hvis I gerne vil prøve at lave en statisk model. Den er dog ikke nødvendig for at løse opgaverne.",
+                  h4("Opgaver:"),
+                  h5("1. Kig på dataen og prøv at forstå hvad de forskellige variable betyder"),
+                  h5("2. Hvilken partner samarbejdede I mest med?"),
+                  h5("3. Hvor meget har hver af partnerne samarbejdet med jer?"),
+                  h5("4. Hvem samarbejdede I mest med i starten og hvem samarbejdede I mest med til sidst?"), 
+                  h5("5. Kan vi bekræfte eller afkræfte den hypotese, som forsøget prøvede at besvare?"), 
+                  h5("6. Hvordan udviklede reaktionstiden sig over tiden? Hvad kan vi sige ud fra det?"),
+                  h5("7. Er der forskel på reaktionstiden mellem forsøgspersonerne?"), 
+                  h5("8. Tag et kig på de vurderinger (Ratings), som I har lavet af hver partner. Stemmer de overens med hvor meget I endte med at samarbejde med dem?"), 
+                  
+                  h5("9. Hvad kunne ellers være interessant at undersøge?"),
+              ),
+              box(width = 12,
+                  fileInput("MainData", "Upload data",
+                            multiple = TRUE,
+                            accept = c("text/csv",
+                                       "text/comma-separated-values,text/plain",
+                                       ".csv"))
+                  
+              ),
+              
+              # The box with tables to display the data and information about the data:
+              tabBox(title = "Tables", width = 12,
+                     tabPanel(title = "Beskrivelse", 
+                              DT::dataTableOutput("descrip")
+                     ),
+                     tabPanel(title = "Data",
+                              DT::dataTableOutput("datatable")
+                     )
+              )
+      ), # end of INTRO page content
+      
+      ############## THE VISUAL EXPLORATION TAB WITH FILTERING AND PLOTS #################################
+      tabItem(tabName = "Exploring",
+              
+              box(width = 12,
+                  h4("På denne side kan du lave forskellige grafer. Ikke alle grafer passer til alle kombinationer af variabler. Prøv at finde en måde at plotte data på, som giver mening i forhold til det spørgsmål du prøver at besvare.")
+              ),
+              
+              # The filtering box
+              box(width = 12,
+                  # Each column is a variable we use to filter our dataset
+                  # We use checboxGroupInput because they allow us to select and deselect multiple levels
+                  column(4,
+                         selectInput("SelectX", 
+                                     label = h4("Vælg X variabel"), 
+                                     choices = list("Partner" = "Partner",
+                                                    "Trial" = "Trial"), 
+                                     selected = 1)),
+                  column(4,
+                         selectInput("SelectY", 
+                                     label = h4("Vælg Y variabel"), 
+                                     choices = list("Ingen" = "none",
+                                      "Player response" = "PlayerResp",
+                                      "Partner response"= "PartnerResp",
+                                      "Reaktionstid" = "RT",
+                                      "Rating" = "Rating"), 
+                                     selected = 1)),
+                  column(4,
+                         h4("Opdel data"),
+                         checkboxInput("partner_col", "Farvekod partner", FALSE),
+                  checkboxInput("ID_wrap", "Vis 4 tilfældige forsøgpersoner", FALSE)
+                  )
+              ),
+              
+              # The plot box
+              # That bow has 3 elements: 2 inputs for color and wrap and 1 box to select different plot types
+              # we arrange both inputs in a row using the column function
+              tabBox(title = "Vælg plottype", width = 12,
+                         # Plot type 1
+                         tabPanel(title = "Graf",
+                                  plotlyOutput("plot1")
+                         ),
+                         # Plot type 2
+                         tabPanel(title = "Barplot",
+                                  plotlyOutput("plot2")
+                         ),
+                         tabPanel(title = "Punktplot",
+                                  plotlyOutput("plot3")
+                         )
+                  )
+      ), # end of PLOT page content
+      
+      ############## THE MODELLING TAB WITH SUMMARY AND DESCRIPTION #################################
+      tabItem(tabName ="Modelling",
+              # box to specify a model
+              box(width = 12,
+                  h4("På denne side kan du udregne forskellige statistiske værdier. Brug nedenstående dropdown menuer til at vælge, hvad du gerne vil udregne. Nederst kan du finde forklaring på de forskellige variabler og matematiske eksempler.")
+              ),
+              box(width = 12,
+                  column(4,
+                         selectInput("SelectVar", 
+                                     label = h4("Vælg variabel"), 
+                                     choices = list(
+                                       "Player response" = "PlayerResp",
+                                       "Partner response"= "PartnerResp",
+                                        "Reaktionstid" = "RT",
+                                        "Rating" = "Rating"), 
+                                     selected = 1)),
+                  column(4,
+                         selectInput("SelectStat", 
+                                     label = h4("Vælg statistisk mål"), 
+                                     choices = list(
+                                       "Gennemsnit" = "mean",
+                                 "Standardafvigelse (Spredning)" = "sd",
+                                                    "Maksium" = "max",
+                                                    "Minimum" = "min",
+                                                    "Median" = "median"), 
+                                     selected = 1)),
+                  column(4, 
+                         selectInput("SelectPartner", 
+                                     label = h4("Vælg partner"), 
+                                     choices = list("Alle" = "Alle",
+                                                    "A" = "A",
+                                                    "B" = "B",
+                                                    "C" = "C",
+                                                    "D" = "D"), 
+                                     selected = 1))
+              ),
+              box(width = 12,
+                  title = "Værdi:",
+                  h5(textOutput("stats"))
+              ), # End of box
+              box(width = 12,
+                  title = "Forklaring:",
+                  h5(textOutput("statsExplain"))
+              ),
+              box(width = 12,
+                  title = "Matematisk eksempel", collapsible = T, collapsed = T, withMathJax(),
+                  uiOutput("formula"),
+                  htmlOutput("mathExplain")
+              )
+      ), # end of MODEL page content
+      tabItem(tabName = "Analysis",
+          box(width = 12,
+          h4("Indenfor statistik kører vi ofte modeller for at undersøge data. På denne side kan du prøve at køre en model. Vælg hvilke variable din model skal indeholde og tryk kør model. Nederst finder du forklaringer på de forskellige værdier. Måske du allerede kender nogle af dem fra matematik?")
+              ),
+              box(width = 12, 
+                  column(6,
+                         selectInput("modelY", 
+                                     label = h4("Vælg Y (afhængig) variabel"), 
+                                     choices = list(
+                                       "Reaktionstid" = "RT",
+                                       "Player response" = "PlayerResp",
+                                       "Rating" = "Rating"), 
+                                     selected = 1)),
+                  column(6,
+                         selectInput("modelX1", 
+                                     label = h4("Vælg X (uafhængig) variabel"), 
+                                     choices = list(
+                            "Partner" = "Partner",
+                            "Partner response"= "PartnerResp", 
+                            "Cooperation Rate" = "CoopRate",
+                            "Social Reputation" = "SocRep"), 
+                                     selected = 1))
+              ),
+        box(width = 12 ,
+            actionButton("model_run", "Kør modellen")),      
+        box(width = 12, title = "Model output",
+            uiOutput("modelsum")
+            ),
+        box(width = 12, title = "Forklaring af model værdier", collapsible = T, collapsed = T,
+            DT::dataTableOutput("ModelExplain")
+            )
+      ) # End of Analysis page
+    ) # end of tabItems (listing all content)
+  )# end of body
+)#ui end
+```
+
+# PART III: THE SERVER
+
+```{r}
+#reactive({return(assign('data',data2,envir=.GlobalEnv))})
+
+# Setting up the server for the website, where dynamic stuff happens
+server <- function(input, output) {
+  
+  # Read in data to global available variable
+  data2 = reactive({return(read.csv(input$MainData$datapath, row.names = 8))})
+  
+  # Read in main data 
+  output$datatable = DT::renderDataTable({
+    data2()
+  })
+  
+  # Output descriptions
+  output$descrip = DT::renderDataTable({
+    description
+  })
+  
+  
+  output$plot1 = renderPlotly({
+    
+    if (input$SelectY == "Rating"){
+      data = data2() %>% group_by(ID, Partner)%>% summarise_at(vars(Rating), funs(mean(., na.rm=TRUE))) 
+
+    }
+    else{
+      data = data2()
+    }
+    
+    if (input$partner_col == F & input$ID_wrap == F){
+    p = ggplot(data, aes_string(input$SelectX, input$SelectY)) + geom_smooth()
+    ggplotly(p)
+    }
+    else if (input$partner_col == T & input$ID_wrap == F){
+      p = ggplot(data, aes_string(input$SelectX, input$SelectY, colour = "Partner")) + geom_smooth()
+      ggplotly(p)
+    }
+    else if (input$partner_col == F & input$ID_wrap == T){
+      p = ggplot(subset(data, ID %in% sample(1:max(ID), 4)), aes_string(input$SelectX, input$SelectY)) + geom_smooth() + facet_wrap(~ID)
+      ggplotly(p)
+    }
+    else{
+     p = ggplot(subset(data, ID %in% sample(1:max(ID), 4)), aes_string(input$SelectX, input$SelectY, colour = "Partner")) + geom_smooth() + facet_wrap(~ID)
+     ggplotly(p)
+    }
+  })
+  
+  output$plot2 = renderPlotly({
+    if (input$SelectY == "Rating"){
+      data = data2() %>% group_by(ID, Partner)%>% summarise_at(vars(Rating), funs(mean(., na.rm=TRUE))) 
+    }
+    else{
+      data = data2()
+    }
+    
+    if (input$partner_col == F & input$ID_wrap == F){
+    p = ggplot(data, aes_string(input$SelectX, input$SelectY)) + geom_bar(stat = "summary") + geom_errorbar(stat= "summary", width = 0.5)
+    ggplotly(p)
+    }
+    else if (input$partner_col == T & input$ID_wrap == F){
+      p = ggplot(data, aes_string(input$SelectX, input$SelectY, fill = "Partner")) + geom_bar(stat = "summary") + geom_errorbar(stat= "summary", width = 0.5)
+      ggplotly(p)
+    }
+    else if (input$partner_col == F & input$ID_wrap == T){
+     p =  ggplot(subset(data, ID %in% sample(1:max(ID), 4)), aes_string(input$SelectX, input$SelectY)) + geom_bar(stat = "summary") + geom_errorbar(stat= "summary", width = 0.5) + facet_wrap(~ID)
+     ggplotly(p)
+    }
+    else{
+      p = ggplot(subset(data, ID %in% sample(1:max(ID), 4)), aes_string(input$SelectX, input$SelectY, fill = "Partner")) + geom_bar(stat = "summary") + geom_errorbar(stat= "summary", width = 0.5) + facet_wrap(~ID)
+      ggplotly(p)
+    }
+    
+  })
+    
+  output$plot3 = renderPlotly({
+    if (input$SelectY == "Rating"){
+      data = data2() %>% group_by(ID, Partner)%>% summarise_at(vars(Rating), funs(mean(., na.rm=TRUE))) 
+    }
+    else{
+      data = data2()
+    }
+    
+    if (input$partner_col == F & input$ID_wrap == F){
+      p = ggplot(data, aes_string(input$SelectX, input$SelectY)) + geom_point()
+      ggplotly(p)
+    }
+    else if (input$partner_col == T & input$ID_wrap == F){
+      p = ggplot(data, aes_string(input$SelectX, input$SelectY, colour = "Partner")) + geom_point()
+      ggplotly(p)
+    }
+    else if (input$partner_col == F & input$ID_wrap == T){
+      p = ggplot(subset(data, ID %in% sample(1:max(ID), 4)), aes_string(input$SelectX, input$SelectY)) + geom_point() + facet_wrap(~ID)
+      ggplotly(p)
+    }
+    else{
+      p = ggplot(subset(data, ID %in% sample(1:max(ID), 4)), aes_string(input$SelectX, input$SelectY, colour = "Partner")) + geom_point() + facet_wrap(~ID)
+      ggplotly(p)
+    }
+  })
+  
+  output$partner_mean = renderText({
+    
+    sum(data$PartnerResponse[data$Partner == input$selectPartner])/length(data$PartnerResponse[data$Partner == input$selectPartner])
+  })
+  
+  output$stats = renderText({
+    
+    if (input$SelectVar == "Rating"){
+      dat = data2()
+    }
+    else{
+      dat = data2()
+    }
+    
+      if (input$SelectPartner == "Alle"){
+        int_dat = dat
+      }
+      else {
+        int_dat = dat[dat$Partner == input$SelectPartner,]
+      }
+      
+      if (input$SelectVar == "Rating"){
+        sub = subset(int_dat, select = "Rating")
+        
+      }
+      else{
+      sub = subset(int_dat, select = input$SelectVar)
+      }
+    
+      if (input$SelectStat == "mean"){
+        mean(sub[,1])
+      }
+      else if (input$SelectStat == "sd"){
+        sd(sub[,1])
+      }
+      
+      else if (input$SelectStat == "max"){
+        max(sub[,1])
+      }
+      
+      else if (input$SelectStat == "min"){
+        min(sub[,1])
+      }
+      
+      else if (input$SelectStat == "median"){
+        median(sub[,1])
+      }
+    
+  })
+  
+  output$statsExplain = renderText({
+    
+    if (input$SelectStat == "mean"){
+      
+      "Gennemsnittet  (også kaldet middeltallet eller middelværdien) er summen af værdierne i et datasæt divideret med antallet af værdier."
+    }
+    else if (input$SelectStat == "median"){
+      
+      "Medianen er den midterste værdi i et sorteret datasæt. Hvis der er et lige antal observationer i datasættet er medianen lig gennemsnittet af de to midterste værdier."
+    }
+    
+    
+    else if(input$SelectStat == "sd"){
+      
+      "Standardafvigelsen eller spredningen bruges inden for sandsynlighedsregning og statistik og er et udtryk for, hvor meget en variabel fordeler sig omkring sin middelværdi."
+      
+    }
+    
+    else{
+      
+      "I matematik er maksimum og minimum henholdsvis det største og det mindste element i en mængde. Maksimum og minimum for en mængde kaldes tilsammen mængdens ekstrema (flertal af ekstremum)"
+    }
+    
+    
+  })
+  
+  
+  output$formula = renderUI({
+    
+    if (input$SelectStat == "mean"){
+        withMathJax(helpText('$$A=\\frac{1}{n} \\cdot \\sum_{i=1}^{n} x_i = \\frac{x_1 + x_2 + ... + x_n}{n}$$'))
+      
+      }
+    else if (input$SelectStat == "sd"){
+        withMathJax(helpText('$$\\sigma = \\sqrt{\\frac{1}{1-n} \\cdot \\sum _{i=1}^{n}{{({x}_{i}-\\bar{x})}^{2}}}$$'))
+      }
+      
+    else if (input$SelectStat == "max"){
+        "Eksempeltvist max værdien af datasættet {1,2,2,2,3,5,6,7,8} lig 8, fordi det er den største værdi i datasættet" 
+      }
+      
+    else if (input$SelectStat == "min"){
+        "Eksempeltvist minimum værdien af datasættet {1,2,2,2,3,5,6,7,8} lig 1, fordi det er den mindste værdi i datasættet"
+      }
+      
+    else if (input$SelectStat == "median"){
+        "Eksempeltvist median værdien af datasættet {1,2,2,2,3,5,6,7,8} lig 3, fordi det er den miderste værdi, når datasættet er ordnet efter størrelse"
+      }
+  })
+  
+  output$mathExplain = renderUI({
+  
+    if (input$SelectStat == "mean"){
+        HTML(paste("Hvor A er gennemsnittet, x er den enkelte observation on n er antallet af observationer", "Eksempeltvist er gennemsnittet af datasættet {1,2,2,2,3,5,6,7,8} lig 36/9 = 4 (summen af værdierne er 36 og der er 9 værdier)", sep="<br/><br/>"))
+      }
+    else if (input$SelectStat == "sd"){
+       HTML(paste("Hvor sigma er standardafvigelsen, x er den enkelte observation, x&#772 er den gennemsnitlige observationsværdi og n er antallet af observationer", "Eksempeltvist er standardafvigelsen af datasættet {1,2,2,2,3,5,6,7,8} lig 2.55 ", sep="<br/><br/>"))
+    }
+    else{}
+  })
+  
+  models = reactiveValues()
+  
+  observeEvent(input$model_run, {
+    
+    if (input$modelY == "RT"){
+      myformula <- as.formula(paste0("log(", input$modelY, ") ~", input$modelX1,  "+ (1|ID)"))
+      dats = data2()
+      dats = dats[dats$RT > 0,]
+      withProgress(message = 'Kører model',
+                   detail = 'Vent et øjeblik', value = 0, {
+                     models$model=lmer(myformula, data = dats)
+                   })
+    }
+    else if (input$modelY == "PlayerResp"){
+      myformula <- as.formula(paste0(input$modelY, "~", input$modelX1,  "+ (1|ID)"))
+      dats = data2()
+      withProgress(message = 'Kører model',
+                   detail = 'Vent et øjeblik', value = 0, {
+                     models$model=glmer(myformula, data = dats, family = "binomial")
+                   })
+      
+    }
+    else if (input$modelY == "Rating"){
+      myformula <- as.formula(paste0(input$modelY, "~", input$modelX1,  "+ (1|ID)"))
+      dats = data2()
+      withProgress(message = 'Kører model',
+                   detail = 'Vent et øjeblik', value = 0, {
+                     models$model=lmer(myformula, data = dats)
+                   })
+    }
+  })
+  
+  output$modelsum = renderUI({
+    HTML(as.character(sjPlot::tab_model(models$model, show.re.var = F, show.ngroups= F, show.icc = F)))
+  })
+  
+  
+  output$ModelExplain = DT::renderDataTable({
+    model_explain
+  })
+  
+  #gsub("(Avenue).*", "\\1", a)
+  
+}#server end
+```
+
+# PART IV: RUN THE WEBSITE
+
+```{r}
+shinyApp(ui, server) #Run app
+```
