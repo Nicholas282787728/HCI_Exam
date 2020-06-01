@@ -6,8 +6,6 @@ output: html_document
 runtime: html_document
 ---
 
-TO DO liste: 
-- Lav model page færdig. 
 
 ```{r setup, include=FALSE}
 library(pacman)
@@ -15,7 +13,6 @@ library(pacman)
 pacman::p_load(
   "shiny", "shinydashboard","shinycustomloader","DT", "tidyverse", "lme4","sjPlot", "plotly")
 
-setwd("C:/Users/Simon/Google Drev/Uni/HCI/HCI_Exam")
 
 ```
 
@@ -27,8 +24,8 @@ setwd("C:/Users/Simon/Google Drev/Uni/HCI/HCI_Exam")
 #data <- read.csv("BankRoberyExampleData.csv", row.names = 1)
 
 ### 2. Make descriptions
-Variabel = c("ID", "Partner", "Trial", "PlayerResp", "RT", "PartnerResp", "CoopRate", "SocRep", "Rating")
-Beskrivelse = c("Unikt ID som representerer hver forsøgsdeltager", "Hvilken partner forsøgsdeltageren interagerede med", "Rundenummer", "Hvad forsøgsdeltageren svarede til partneren", "Hvor lang tid forsøgspersonen var om at svare", "Hvad partneren svarede eller ville have svaret", "Partnerens samarbejdsvillighed i procent", "Partnerens sociale ry", "Den score som forsøgdeltageren har givet personen efter eksperimentet")
+Variabel = c("ID", "Partner", "Runde", "DeltagerSvar", "RT", "PartnerSvar", "SamProcent", "SocialScore", "Vurdering")
+Beskrivelse = c("Unikt ID som representerer hver forsøgsdeltager", "Hvilken partner forsøgsdeltageren interagerede med (A, B, C, D)", "Rundenummer", "Hvad forsøgsdeltageren svarede til partneren (1 = ja, 0 = Nej)", "Hvor lang tid forsøgspersonen var om at svare", "Hvad partneren svarede eller ville have svaret (1 = ja, 0 = Nej)", "Partnerens samarbejdsvillighed i procent (30%, 70%)", "Partnerens sociale ry (Lav, Høj)", "Den score som forsøgdeltageren har givet personen efter eksperimentet (0-5)")
 description = data.frame(Variabel, Beskrivelse)
 
 
@@ -44,7 +41,7 @@ model_explain = data.frame(Variabel, Forklaring)
 ```{r}
 # Setting up the UI for the website
 ui <- dashboardPage(
-  dashboardHeader(title = "Bank Robery Data Analysis"),
+  dashboardHeader(title = "Det Store Bankrøveri"),
   
   dashboardSidebar(
     sidebarMenu(
@@ -61,11 +58,11 @@ ui <- dashboardPage(
       
       ############## THE INTRODUCTION TAB WITH INFO AND TABLES #################################
       tabItem(tabName = "Intro",
-              
+              fluidPage(
               # The box with short introduction text:
               box(width = 12,
                   h4("Introduktion:"),
-                  "På denne hjemmside har I mulighed for at undersøge data fra det eksperiment I lige har gennemført. I skal forsøge at besvare nedenstående opgaver. Hjemmesiden er meget simpel og består af 4 sider. Den første indeholder opgaverne I skal løse og kan vise dataen. På anden siden kan I lave grafer over dataen. På tredje side kan I udregne forskellige deskriptive statistiske værdier. Den sidste side kan bruges, hvis I gerne vil prøve at lave en statisk model. Den er dog ikke nødvendig for at løse opgaverne.",
+                  "På denne hjemmeside har I mulighed for at undersøge data fra det eksperiment I lige har gennemført. I skal forsøge at besvare nedenstående opgaver. Hjemmesiden er meget simpel og består af 4 sider. Den første indeholder opgaverne I skal løse og kan vise dataen. På anden siden kan I lave grafer over dataen. På tredje side kan I udregne forskellige  statistiske værdier. Den sidste side kan bruges, hvis I gerne vil prøve at lave en statistisk model. Den er dog ikke nødvendig for at løse opgaverne.",
                   h4("Opgaver:"),
                   h5("1. Kig på dataen og prøv at forstå hvad de forskellige variable betyder"),
                   h5("2. Hvilken partner samarbejdede I mest med?"),
@@ -74,7 +71,7 @@ ui <- dashboardPage(
                   h5("5. Kan vi bekræfte eller afkræfte den hypotese, som forsøget prøvede at besvare?"), 
                   h5("6. Hvordan udviklede reaktionstiden sig over tiden? Hvad kan vi sige ud fra det?"),
                   h5("7. Er der forskel på reaktionstiden mellem forsøgspersonerne?"), 
-                  h5("8. Tag et kig på de vurderinger (Ratings), som I har lavet af hver partner. Stemmer de overens med hvor meget I endte med at samarbejde med dem?"), 
+                  h5("8. Tag et kig på de vurderinger, som I har lavet af hver partner. Stemmer de overens med hvor meget I endte med at samarbejde med dem?"), 
                   
                   h5("9. Hvad kunne ellers være interessant at undersøge?"),
               ),
@@ -96,34 +93,38 @@ ui <- dashboardPage(
                               DT::dataTableOutput("datatable")
                      )
               )
+            )
       ), # end of INTRO page content
       
       ############## THE VISUAL EXPLORATION TAB WITH FILTERING AND PLOTS #################################
       tabItem(tabName = "Exploring",
-              
+              fluidPage(
               box(width = 12,
                   h4("På denne side kan du lave forskellige grafer. Ikke alle grafer passer til alle kombinationer af variabler. Prøv at finde en måde at plotte data på, som giver mening i forhold til det spørgsmål du prøver at besvare.")
               ),
               
               # The filtering box
               box(width = 12,
-                  # Each column is a variable we use to filter our dataset
-                  # We use checboxGroupInput because they allow us to select and deselect multiple levels
-                  column(4,
-                         selectInput("SelectX", 
-                                     label = h4("Vælg X variabel"), 
-                                     choices = list("Partner" = "Partner",
-                                                    "Trial" = "Trial"), 
-                                     selected = 1)),
                   column(4,
                          selectInput("SelectY", 
-                                     label = h4("Vælg Y variabel"), 
-                                     choices = list("Ingen" = "none",
-                                      "Player response" = "PlayerResp",
-                                      "Partner response"= "PartnerResp",
+                                     label = h4("Vælg Y (afhængig) variabel"), 
+                                     choices = list(
+                                      "Deltager Svar" = "DeltagerSvar",
+                                      "Partner Svar"= "PartnerSvar",
                                       "Reaktionstid" = "RT",
-                                      "Rating" = "Rating"), 
+                                      "Vurdering" = "Vurdering"), 
                                      selected = 1)),
+                  column(4,
+                         selectInput("SelectX", 
+                                     label = h4("Vælg X (uafhængig) variabel"), 
+                                     choices = list(
+                                       "Partner" = "Partner",
+                                        "Runde" = "Runde",
+                                        "Samarbejds Procent" = "SamProcent",
+                                       "Social Score" = "SocialScore"
+                                                    ), 
+                                     selected = 1)),
+
                   column(4,
                          h4("Opdel data"),
                          checkboxInput("partner_col", "Farvekod partner", FALSE),
@@ -131,12 +132,9 @@ ui <- dashboardPage(
                   )
               ),
               
-              # The plot box
-              # That bow has 3 elements: 2 inputs for color and wrap and 1 box to select different plot types
-              # we arrange both inputs in a row using the column function
               tabBox(title = "Vælg plottype", width = 12,
                          # Plot type 1
-                         tabPanel(title = "Graf",
+                         tabPanel(title = "Linjeplot",
                                   plotlyOutput("plot1")
                          ),
                          # Plot type 2
@@ -147,11 +145,12 @@ ui <- dashboardPage(
                                   plotlyOutput("plot3")
                          )
                   )
+              )
       ), # end of PLOT page content
       
       ############## THE MODELLING TAB WITH SUMMARY AND DESCRIPTION #################################
       tabItem(tabName ="Modelling",
-              # box to specify a model
+              fluidPage(
               box(width = 12,
                   h4("På denne side kan du udregne forskellige statistiske værdier. Brug nedenstående dropdown menuer til at vælge, hvad du gerne vil udregne. Nederst kan du finde forklaring på de forskellige variabler og matematiske eksempler.")
               ),
@@ -160,10 +159,10 @@ ui <- dashboardPage(
                          selectInput("SelectVar", 
                                      label = h4("Vælg variabel"), 
                                      choices = list(
-                                       "Player response" = "PlayerResp",
-                                       "Partner response"= "PartnerResp",
+                                       "Deltager Svar" = "DeltagerSvar",
+                                       "Partner Svar"= "PartnerSvar",
                                         "Reaktionstid" = "RT",
-                                        "Rating" = "Rating"), 
+                                        "Vurdering" = "Vurdering"), 
                                      selected = 1)),
                   column(4,
                          selectInput("SelectStat", 
@@ -186,22 +185,29 @@ ui <- dashboardPage(
                                      selected = 1))
               ),
               box(width = 12,
-                  title = "Værdi:",
+                  column(width = 4,
+                  h4("Værdi:"),
                   h5(textOutput("stats"))
-              ), # End of box
-              box(width = 12,
-                  title = "Forklaring:",
-                  h5(textOutput("statsExplain"))
               ),
+              column(width = 8,
+                  h4("Forklaring:"),
+                  h5(textOutput("statsExplain"))
+              )),
               box(width = 12,
                   title = "Matematisk eksempel", collapsible = T, collapsed = T, withMathJax(),
                   uiOutput("formula"),
                   htmlOutput("mathExplain")
               )
+          )
       ), # end of MODEL page content
+      # Analysis page start
       tabItem(tabName = "Analysis",
+              fluidPage(
           box(width = 12,
-          h4("Indenfor statistik kører vi ofte modeller for at undersøge data. På denne side kan du prøve at køre en model. Vælg hvilke variable din model skal indeholde og tryk kør model. Nederst finder du forklaringer på de forskellige værdier. Måske du allerede kender nogle af dem fra matematik?")
+          h4("Indenfor statistik kører vi ofte modeller for at undersøge data. På denne side kan du prøve at køre en model. Modellen der anvedes her er af typen 'generelle lineære mixede modeller'. Du kan betragte det som en avanceret form for lineær regression. Det er ikke vigtigt at du forstår præcist hvordan modellen fungere, men er du interesseret kan du læse mere via følgende link:"),
+          h4(uiOutput("link")),
+             
+            h4("Vælg hvilke variable din model skal indeholde og tryk kør model. Nederst på siden finder du forklaringer på de forskellige værdier. Måske du allerede kender nogle af dem fra matematik?")
               ),
               box(width = 12, 
                   column(6,
@@ -209,27 +215,32 @@ ui <- dashboardPage(
                                      label = h4("Vælg Y (afhængig) variabel"), 
                                      choices = list(
                                        "Reaktionstid" = "RT",
-                                       "Player response" = "PlayerResp",
-                                       "Rating" = "Rating"), 
+                                       "Deltager Svar" = "DeltagerSvar",
+                                       "Vurdering" = "Vurdering"), 
                                      selected = 1)),
                   column(6,
                          selectInput("modelX1", 
                                      label = h4("Vælg X (uafhængig) variabel"), 
                                      choices = list(
                             "Partner" = "Partner",
-                            "Partner response"= "PartnerResp", 
-                            "Cooperation Rate" = "CoopRate",
-                            "Social Reputation" = "SocRep"), 
+                            "Partner Svar"= "PartnerSvar", 
+                            "Samarbejds Procent" = "SamProcent",
+                            "Social Score" = "SocialScore",
+                            "Runde" = "Runde",
+                            "Deltager Svar" = "DeltagerSvar"), 
                                      selected = 1))
               ),
         box(width = 12 ,
             actionButton("model_run", "Kør modellen")),      
-        box(width = 12, title = "Model output",
+        box(width = 12,
+            column(width = 6, title = "Model output",
             uiOutput("modelsum")
             ),
-        box(width = 12, title = "Forklaring af model værdier", collapsible = T, collapsed = T,
+        column(width = 6, title = "Forklaring af model værdier",
             DT::dataTableOutput("ModelExplain")
             )
+              )
+              )
       ) # End of Analysis page
     ) # end of tabItems (listing all content)
   )# end of body
@@ -260,8 +271,27 @@ server <- function(input, output) {
   
   output$plot1 = renderPlotly({
     
-    if (input$SelectY == "Rating"){
-      data = data2() %>% group_by(ID, Partner)%>% summarise_at(vars(Rating), funs(mean(., na.rm=TRUE))) 
+    if (input$SelectY == "Vurdering"){
+      data = data2() %>% group_by(ID, Partner)%>% summarise_at(vars(Vurdering, PartnerSvar, RT, DeltagerSvar, SamProcent, SocialScore), funs(mean(., na.rm=TRUE)))
+
+    for (i in 1:nrow(data)){
+      if (data$Partner[i] == "A"){
+        data$SamProcent[i] = "30%"
+        data$SocialScore[i] = "Høj"
+      }
+      if (data$Partner[i] == "B"){
+        data$SamProcent[i] = "70%"
+        data$SocialScore[i] = "Lav"
+      }
+      if (data$Partner[i] == "C"){
+        data$SamProcent[i] = "30%"
+        data$SocialScore[i] = "Lav"
+      }
+      if (data$Partner[i] == "D"){
+        data$SamProcent[i] = "70%"
+        data$SocialScore[i] = "Høj"
+      }
+    }
 
     }
     else{
@@ -287,8 +317,27 @@ server <- function(input, output) {
   })
   
   output$plot2 = renderPlotly({
-    if (input$SelectY == "Rating"){
-      data = data2() %>% group_by(ID, Partner)%>% summarise_at(vars(Rating), funs(mean(., na.rm=TRUE))) 
+    if (input$SelectY == "Vurdering"){
+      data = data2() %>% group_by(ID, Partner)%>% summarise_at(vars(Vurdering, PartnerSvar, RT, DeltagerSvar, SamProcent, SocialScore), funs(mean(., na.rm=TRUE)))
+
+    for (i in 1:nrow(data)){
+      if (data$Partner[i] == "A"){
+        data$SamProcent[i] = "30%"
+        data$SocialScore[i] = "Høj"
+      }
+      if (data$Partner[i] == "B"){
+        data$SamProcent[i] = "70%"
+        data$SocialScore[i] = "Lav"
+      }
+      if (data$Partner[i] == "C"){
+        data$SamProcent[i] = "30%"
+        data$SocialScore[i] = "Lav"
+      }
+      if (data$Partner[i] == "D"){
+        data$SamProcent[i] = "70%"
+        data$SocialScore[i] = "Høj"
+      }
+    }
     }
     else{
       data = data2()
@@ -314,8 +363,27 @@ server <- function(input, output) {
   })
     
   output$plot3 = renderPlotly({
-    if (input$SelectY == "Rating"){
-      data = data2() %>% group_by(ID, Partner)%>% summarise_at(vars(Rating), funs(mean(., na.rm=TRUE))) 
+    if (input$SelectY == "Vurdering"){
+      data = data2() %>% group_by(ID, Partner)%>% summarise_at(vars(Vurdering, PartnerSvar, RT, DeltagerSvar, SamProcent, SocialScore), funs(mean(., na.rm=TRUE)))
+
+    for (i in 1:nrow(data)){
+      if (data$Partner[i] == "A"){
+        data$SamProcent[i] = "30%"
+        data$SocialScore[i] = "Høj"
+      }
+      if (data$Partner[i] == "B"){
+        data$SamProcent[i] = "70%"
+        data$SocialScore[i] = "Lav"
+      }
+      if (data$Partner[i] == "C"){
+        data$SamProcent[i] = "30%"
+        data$SocialScore[i] = "Lav"
+      }
+      if (data$Partner[i] == "D"){
+        data$SamProcent[i] = "70%"
+        data$SocialScore[i] = "Høj"
+      }
+    }
     }
     else{
       data = data2()
@@ -339,19 +407,9 @@ server <- function(input, output) {
     }
   })
   
-  output$partner_mean = renderText({
-    
-    sum(data$PartnerResponse[data$Partner == input$selectPartner])/length(data$PartnerResponse[data$Partner == input$selectPartner])
-  })
-  
   output$stats = renderText({
     
-    if (input$SelectVar == "Rating"){
-      dat = data2()
-    }
-    else{
-      dat = data2()
-    }
+    dat = data2()
     
       if (input$SelectPartner == "Alle"){
         int_dat = dat
@@ -360,8 +418,10 @@ server <- function(input, output) {
         int_dat = dat[dat$Partner == input$SelectPartner,]
       }
       
-      if (input$SelectVar == "Rating"){
-        sub = subset(int_dat, select = "Rating")
+      if (input$SelectVar == "Vurdering"){
+        int_dat2 = int_dat %>% group_by(ID, Partner)%>% summarise_at(vars(Vurdering), funs(mean(., na.rm=TRUE)))
+        sub = subset(int_dat2, select = "Vurdering")
+        sub = as.data.frame(sub)
         
       }
       else{
@@ -450,12 +510,16 @@ server <- function(input, output) {
     else{}
   })
   
+  output$link <- renderUI({
+    a("Generalized linear mixed models", href="https://en.wikipedia.org/wiki/Generalized_linear_mixed_model")
+  })
+  
   models = reactiveValues()
   
   observeEvent(input$model_run, {
     
     if (input$modelY == "RT"){
-      myformula <- as.formula(paste0("log(", input$modelY, ") ~", input$modelX1,  "+ (1|ID)"))
+      myformula <- as.formula(paste0("log(", input$modelY, ") ~", input$modelX1,  "+ (Runde|ID)"))
       dats = data2()
       dats = dats[dats$RT > 0,]
       withProgress(message = 'Kører model',
@@ -463,8 +527,8 @@ server <- function(input, output) {
                      models$model=lmer(myformula, data = dats)
                    })
     }
-    else if (input$modelY == "PlayerResp"){
-      myformula <- as.formula(paste0(input$modelY, "~", input$modelX1,  "+ (1|ID)"))
+    else if (input$modelY == "DeltagerSvar"){
+      myformula <- as.formula(paste0(input$modelY, "~", input$modelX1,  "+ (Runde|ID)"))
       dats = data2()
       withProgress(message = 'Kører model',
                    detail = 'Vent et øjeblik', value = 0, {
@@ -472,12 +536,32 @@ server <- function(input, output) {
                    })
       
     }
-    else if (input$modelY == "Rating"){
+    else if (input$modelY == "Vurdering"){
+      dat2 = data2() %>% group_by(ID, Partner)%>% summarise_at(vars(Vurdering, PartnerSvar, RT, DeltagerSvar, SamProcent, SocialScore), funs(mean(., na.rm=TRUE)))
+
+    for (i in 1:nrow(dat2)){
+      if (dat2$Partner[i] == "A"){
+        dat2$SamProcent[i] = "30%"
+        dat2$SocialScore[i] = "Høj"
+      }
+      if (dat2$Partner[i] == "B"){
+        dat2$SamProcent[i] = "70%"
+        dat2$SocialScore[i] = "Lav"
+      }
+      if (dat2$Partner[i] == "C"){
+        dat2$SamProcent[i] = "30%"
+        dat2$SocialScore[i] = "Lav"
+      }
+      if (dat2$Partner[i] == "D"){
+        dat2$SamProcent[i] = "70%"
+        dat2$SocialScore[i] = "Høj"
+      }
+    }
+      
       myformula <- as.formula(paste0(input$modelY, "~", input$modelX1,  "+ (1|ID)"))
-      dats = data2()
       withProgress(message = 'Kører model',
                    detail = 'Vent et øjeblik', value = 0, {
-                     models$model=lmer(myformula, data = dats)
+                     models$model=lmer(myformula, data = dat2)
                    })
     }
   })
@@ -490,8 +574,6 @@ server <- function(input, output) {
   output$ModelExplain = DT::renderDataTable({
     model_explain
   })
-  
-  #gsub("(Avenue).*", "\\1", a)
   
 }#server end
 ```
