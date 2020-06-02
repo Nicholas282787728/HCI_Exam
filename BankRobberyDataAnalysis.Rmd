@@ -226,7 +226,6 @@ ui <- dashboardPage(
                             "Partner Svar"= "PartnerSvar", 
                             "Samarbejds Procent" = "SamProcent",
                             "Social Score" = "SocialScore",
-                            "Runde" = "Runde",
                             "Deltager Svar" = "DeltagerSvar"), 
                                      selected = 1))
               ),
